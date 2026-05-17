@@ -364,11 +364,30 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
       if (modelLoaded) {
         if (!modelGroupRef.current) return;
         // --- Output to GLTF Skinned Mesh ---
+        // --- Dynamic Z-axis Depth Estimation ---
+        let depthScale = 2.0;
+        const rawLShoulder = frame.landmarks[11];
+        const rawRShoulder = frame.landmarks[12];
+        const rawLHip = frame.landmarks[23];
+        const rawRHip = frame.landmarks[24];
+        
+        if (rawLShoulder && rawRShoulder && rawLHip && rawRHip) {
+            // Compute torso diagonal as a reference for anatomical depth scaling
+            const dx = rawLShoulder.x - rawRHip.x;
+            const dy = rawLShoulder.y - rawRHip.y;
+            const torsoSize = Math.sqrt(dx * dx + dy * dy);
+            if (torsoSize > 0.1) {
+                // Base Z multiplier scaled inversely by apparent torso size for perspective depth correction
+                depthScale = (0.5 / torsoSize) * 3.0;
+            }
+        }
+
         const getLm = (idx: number) => {
             const lm = frame.landmarks[idx];
             if (!lm) return null;
             // Invert X axis so user's physical right arm maps to screen right side = physical right of avatar
-            return new THREE.Vector3(-(lm.x - 0.5) * 2, -(lm.y - 0.5) * 2, -lm.z * 2);
+            // Apply estimated depth scale to Z for more accurate 3D replay representation
+            return new THREE.Vector3(-(lm.x - 0.5) * 2, -(lm.y - 0.5) * 2, -lm.z * depthScale);
         };
 
         // Torso Alignment & Root Motion
