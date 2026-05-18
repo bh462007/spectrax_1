@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import React, { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export interface ReplayFrame {
   timestamp: number;
@@ -119,7 +123,7 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-
+  const controlsRef = useRef<OrbitControls | null>(null);
   // Fallback refs
   const jointsRef = useRef<THREE.Mesh[]>([]);
   const bonesRef = useRef<
@@ -174,6 +178,14 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
     renderer.shadowMap.autoUpdate = true;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 + 0.1; // allow looking slightly from below
+    controls.minDistance = 1.0;
+    controls.maxDistance = 10.0;
+    controlsRef.current = controls;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
@@ -430,6 +442,7 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
       if (mountRef.current && rendererRef.current) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
+      controlsRef.current?.dispose();
       rendererRef.current?.dispose();
     };
   }, [frames, modelUrl]);
@@ -559,6 +572,46 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
             );
             cameraRef.current.lookAt(lookTarget);
           }
+            const shoulderCenter = new THREE.Vector3().addVectors(lShoulder, rShoulder).multiplyScalar(0.5);
+            const hipCenter = new THREE.Vector3().addVectors(lHip, rHip).multiplyScalar(0.5);
+
+            // Up vector (hips pointing UP to shoulders)
+            const up = new THREE.Vector3().subVectors(shoulderCenter, hipCenter).normalize();
+            
+            // Right vector (User Left Shoulder 11 to User Right Shoulder 12 mapping physical right)
+            const right = new THREE.Vector3().subVectors(lShoulder, rShoulder).normalize();
+            
+            // Back vector (cross product produces orthogonal depth Z)
+            const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+            
+            // Perfect orthogonal matrix
+            right.crossVectors(up, forward).normalize();
+            const mat = new THREE.Matrix4();
+            mat.makeBasis(right, up, forward);
+            const torsoQuat = new THREE.Quaternion().setFromRotationMatrix(mat);
+
+            // Apply heavily smoothed physical turning and squat dropping (0.2 -> 0.05)
+            modelGroupRef.current.quaternion.slerp(torsoQuat, 0.05);
+            
+            const rotatedOffset = rootOffsetRef.current.clone().applyQuaternion(modelGroupRef.current.quaternion);
+            const targetPos = hipCenter.clone().add(rotatedOffset);
+            
+            // --- Grounding: Lock the lowest foot firmly to the ground plane (-1.0) ---
+            const minAnkleY = Math.min(lAnkle?.y || 0, rAnkle?.y || 0);
+            targetPos.y = -1.0 - minAnkleY;
+
+            modelGroupRef.current.position.lerp(targetPos, 0.05);
+
+            // Update model matrix since we moved it, so FK calculation has the correct parent offsets!
+            modelGroupRef.current.updateMatrixWorld(true);
+
+            // --- Dynamic Camera Tracking & Orbit Target Sync ---
+            const lookTarget = new THREE.Vector3().lerpVectors(hipCenter, shoulderCenter, 0.5);
+            if (controlsRef.current) {
+                controlsRef.current.target.lerp(lookTarget, 0.05);
+            } else if (cameraRef.current) {
+                cameraRef.current.lookAt(lookTarget);
+            }
         }
 
         const applyPose = (
@@ -764,6 +817,10 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
             0.2,
           );
         });
+      }
+
+      if (controlsRef.current) {
+        controlsRef.current.update();
       }
 
       if (sceneRef.current && cameraRef.current && rendererRef.current) {
