@@ -32,6 +32,22 @@ interface WorkoutScreenProps {
   bodyType?: BodyType;
 }
 
+// ── Visually-hidden style (sr-only) ──────────────────────────────────────────
+// This CSS pattern hides an element from sighted users while keeping it fully
+// available to screen readers. clip-path: inset(50%) is the modern replacement
+// for the deprecated `clip: rect(...)` property.
+const srOnly: React.CSSProperties = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: 0,
+  margin: '-1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+  border: 0,
+};
+
 export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({ exercise, onEnd, onAutoDetect, bodyType }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -98,6 +114,46 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({ exercise, onEnd, o
     repScores: [],
     accuracy: 100
   });
+
+  // ── ARIA Live Region State ────────────────────────────────────────────────────
+  // We use THREE separate state variables for announcements.
+  // Why separate? If reps and feedback shared one string, every rep would
+  // re-read the feedback, and every feedback change would re-read the rep count.
+  // Keeping them separate means each is announced only when IT changes.
+  const [feedbackAnnouncement, setFeedbackAnnouncement] = useState('');
+  const [repAnnouncement, setRepAnnouncement] = useState('');
+  const [alertAnnouncement, setAlertAnnouncement] = useState('');
+
+  // We use a ref (not state) for the previous rep count because we only need it
+  // for comparison — it doesn't need to cause a re-render on its own.
+  const prevRepsRef = useRef(0);
+
+  // ── Announce pose correction feedback ─────────────────────────────────────────
+  // useEffect runs ONLY when engineState.feedback changes to a different string.
+  // React's dependency comparison handles deduplication automatically — the same
+  // message repeated across frames will NOT re-trigger this effect.
+  useEffect(() => {
+    setFeedbackAnnouncement(engineState.feedback);
+  }, [engineState.feedback]);
+
+  // ── Announce rep count on each increment ─────────────────────────────────────
+  // We check prevRepsRef so we only announce when reps actually go up.
+  // This prevents announcing "Rep 0" on first render.
+  useEffect(() => {
+    if (engineState.reps > 0 && engineState.reps > prevRepsRef.current) {
+      setRepAnnouncement(`Rep ${engineState.reps} complete`);
+    }
+    prevRepsRef.current = engineState.reps;
+  }, [engineState.reps]);
+
+  // ── Announce exercise mismatch errors ─────────────────────────────────────────
+  // role="alert" with aria-live="assertive" will interrupt the screen reader
+  // immediately. We only use this for genuinely urgent errors like a mismatch.
+  useEffect(() => {
+    if (mismatchError) {
+      setAlertAnnouncement(`Exercise mismatch detected. You appear to be doing ${mismatchError}. Switching is disabled mid-set.`);
+    }
+  }, [mismatchError]);
 
 
   useEffect(() => {
@@ -411,6 +467,62 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({ exercise, onEnd, o
             FINISH SESSION <StopCircle size={18} />
           </button>
         </div>
+      </div>
+
+      {/*
+        ══════════════════════════════════════════════════════════
+        ARIA LIVE REGIONS — Screen Reader Announcements
+        ══════════════════════════════════════════════════════════
+
+        HOW THIS WORKS:
+        - These <div>s are invisible to sighted users (srOnly style hides them).
+        - Screen readers watch them. When the text content changes, the screen
+          reader automatically reads the new text aloud — no focus change needed.
+        - We use THREE separate divs so announcements don't overwrite each other.
+
+        WHY NOT ONE DIV?
+        - If reps and feedback shared one string, every rep would re-announce
+          the full feedback sentence, making it repetitive and confusing.
+
+        IMPORTANT — These divs must ALWAYS be in the DOM (never inside an
+        `{condition && <div>}` block). If a live region is removed and re-added,
+        screen readers lose track of it and stop announcing.
+
+        aria-live="polite"   → waits for the user to finish reading, then speaks.
+        aria-live="assertive"→ interrupts immediately. Use only for urgent errors.
+        role="status"        → pairs with polite; improves NVDA/JAWS compatibility.
+        role="alert"         → pairs with assertive; for urgent alerts.
+        aria-atomic="true"   → reads the whole div content, not just the changed part.
+      */}
+
+      {/* Live region 1: Pose correction feedback */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={srOnly}
+      >
+        {feedbackAnnouncement}
+      </div>
+
+      {/* Live region 2: Rep count — announced separately so it's clean and distinct */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={srOnly}
+      >
+        {repAnnouncement}
+      </div>
+
+      {/* Live region 3: Urgent alerts (exercise mismatch) — interrupts screen reader */}
+      <div
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+        style={srOnly}
+      >
+        {alertAnnouncement}
       </div>
 
       <style>{`

@@ -1,5 +1,5 @@
-import { Results, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import * as mpPose from '@mediapipe/pose';
+import * as drawingUtils from '@mediapipe/drawing_utils';
 
 /**
  * overlayRenderer.ts (Updated for Multi-Exercise)
@@ -39,7 +39,8 @@ export class OverlayRenderer {
    * @param status Overall exercise status.
    * @param primaryJoints Landmarks relevant to the current exercise.
    */
-  draw(results: Results, status: 'green' | 'yellow' | 'red' = 'green', primaryJoints: number[] = []) {
+
+  draw(results: mpPose.Results, status: 'green' | 'yellow' | 'red' = 'green', primaryJoints: number[] = []) {
     if (!this.ctx || !results.poseLandmarks) return;
 
     this.clear();
@@ -49,20 +50,20 @@ export class OverlayRenderer {
     this.drawScanningLine();
 
     // 1. Draw standard connectors with status color
-    drawConnectors(this.ctx, results.poseLandmarks, POSE_CONNECTIONS, {
+    drawingUtils.drawConnectors(this.ctx, results.poseLandmarks, mpPose.POSE_CONNECTIONS, {
       color: 'rgba(255, 255, 255, 0.2)',
       lineWidth: 2,
     });
 
     // 2. Draw highlighted connections for primary workout joints
     // This provides stronger visual feedback on the active movement.
-    drawConnectors(this.ctx, results.poseLandmarks, POSE_CONNECTIONS, {
+    drawingUtils.drawConnectors(this.ctx, results.poseLandmarks, mpPose.POSE_CONNECTIONS, {
       color: color,
       lineWidth: 4,
     });
 
     // 3. Draw Landmarks with dynamic size/glow
-    drawLandmarks(this.ctx, results.poseLandmarks, {
+   drawingUtils.drawLandmarks(this.ctx, results.poseLandmarks, {
       color: '#ffffff',
       fillColor: (data) => {
           // Highlight primary joints with stronger color

@@ -1,8 +1,8 @@
+// Named imports — explicit and safe in Vite. No namespace alias needed.
 import { Pose, Results } from '@mediapipe/pose';
 
-
 /**
- * poseService.ts (Updated for Stability)
+ * poseService.ts
  * Wraps MediaPipe Pose for high-performance body tracking.
  * Uses robust CDN loading and frame guards to prevent WASM and asset errors.
  */
@@ -23,7 +23,7 @@ export class PoseService {
     try {
       this.pose = new Pose({
         locateFile: (file) => {
-          // Standard CDN - JSDelivr is usually the most reliable for MediaPipe
+          // JSDelivr CDN — most reliable for MediaPipe WASM assets
           return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
         }
       });
@@ -48,10 +48,10 @@ export class PoseService {
    */
   onResults(callback: (results: Results) => void) {
     if (!this.pose) return;
-    
+
     this.pose.onResults((results) => {
       this.inProgress = false;
-      this.errorCount = 0; // Reset error count on success
+      this.errorCount = 0;
       if (results) {
         callback(results);
       }
@@ -59,11 +59,11 @@ export class PoseService {
   }
 
   /**
-   * Processes a single frame.
+   * Processes a single video frame.
    */
   async send(image: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
     if (!this.pose || !this.isLoaded || this.inProgress) return;
-    
+
     this.inProgress = true;
     try {
       await this.pose.send({ image });
@@ -71,13 +71,13 @@ export class PoseService {
       this.inProgress = false;
       this.errorCount++;
       console.error("PoseService: send error", error);
-      
-      // If we see recurring fatal errors, try to re-initialize
+
+      // Re-initialize after too many consecutive errors
       if (this.errorCount > 10) {
-          console.warn("PoseService: too many errors, attempting reset...");
-          this.close();
-          this.init();
-          this.errorCount = 0;
+        console.warn("PoseService: too many errors, attempting reset...");
+        this.close();
+        this.init();
+        this.errorCount = 0;
       }
     }
   }
@@ -98,6 +98,6 @@ export class PoseService {
   }
 }
 
-// Ensure singleton instance
+// Singleton — one shared instance across the app
 const globalPoseService = new PoseService();
 export { globalPoseService as poseService };
