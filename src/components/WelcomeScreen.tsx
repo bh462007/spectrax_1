@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Play, Sparkles, History } from "lucide-react";
 
 interface WelcomeScreenProps {
@@ -11,6 +11,19 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onViewHistory,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    const x = -((clientY - innerHeight / 2) / innerHeight) * 20;
+    const y = ((clientX - innerWidth / 2) / innerWidth) * 20;
+    setTilt({ x, y });
+  };
+
+  const handleMouseLeave = () => {
+    setTilt({ x: 0, y: 0 });
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -87,6 +100,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   return (
     <div
       className="screen-container welcome-screen"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       style={{
         justifyContent: "center",
         alignItems: "center",
@@ -98,7 +113,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         style={{ position: "absolute", inset: 0, opacity: 0.6 }}
       />
 
-      <div className="animate-in" style={{ position: "relative", zIndex: 10 }}>
+      <div 
+        className="animate-in" 
+        style={{ 
+          position: "relative", 
+          zIndex: 10,
+          transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+          transition: "transform 0.15s ease-out",
+          transformStyle: "preserve-3d"
+        }}
+      >
         <div
           style={{
             display: "inline-flex",

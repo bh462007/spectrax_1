@@ -4,6 +4,7 @@ export interface GestureResult {
   leftWristAboveShoulder: boolean;
   rightWristAboveShoulder: boolean;
   isPoseLost: boolean;
+  isThumbsUp?: boolean;
 }
 
 const VISIBILITY_THRESHOLD = 0.5;
@@ -43,6 +44,7 @@ class GestureService {
         leftWristAboveShoulder: false,
         rightWristAboveShoulder: false,
         isPoseLost: true,
+        isThumbsUp: false,
       };
     }
 
@@ -67,6 +69,7 @@ class GestureService {
         leftWristAboveShoulder: false,
         rightWristAboveShoulder: false,
         isPoseLost: true,
+        isThumbsUp: false,
       };
     }
 
@@ -83,7 +86,26 @@ class GestureService {
 
     const bothHandsRaised = leftWristAboveShoulder && rightWristAboveShoulder;
 
-    this.frameBuffer.push(bothHandsRaised);
+    const leftThumbIdx = 21;
+    const leftIndexIdx = 19;
+    const leftPinkyIdx = 17;
+    const rightThumbIdx = 22;
+    const rightIndexIdx = 20;
+    const rightPinkyIdx = 18;
+
+    const leftThumbsUp = 
+      this.isJointAboveJoint(landmarks, leftThumbIdx, leftIndexIdx) && 
+      this.isJointAboveJoint(landmarks, leftThumbIdx, leftPinkyIdx) &&
+      this.isJointAboveJoint(landmarks, leftIndexIdx, leftWristIdx);
+
+    const rightThumbsUp = 
+      this.isJointAboveJoint(landmarks, rightThumbIdx, rightIndexIdx) && 
+      this.isJointAboveJoint(landmarks, rightThumbIdx, rightPinkyIdx) &&
+      this.isJointAboveJoint(landmarks, rightIndexIdx, rightWristIdx);
+
+    const isThumbsUpDetected = leftThumbsUp || rightThumbsUp;
+
+    this.frameBuffer.push(bothHandsRaised || isThumbsUpDetected);
     if (this.frameBuffer.length > this.bufferSize) {
       this.frameBuffer.shift();
     }
@@ -97,6 +119,7 @@ class GestureService {
       leftWristAboveShoulder,
       rightWristAboveShoulder,
       isPoseLost: false,
+      isThumbsUp: isThumbsUpDetected,
     };
   }
 
