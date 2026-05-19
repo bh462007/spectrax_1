@@ -795,6 +795,8 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({ exercise, onEnd, o
               letterSpacing: "2px",
               margin: "10px 0",
             }}
+            aria-live="assertive"
+            aria-atomic="true"
           >
             {engineState.feedback.toUpperCase()}
           </p>
