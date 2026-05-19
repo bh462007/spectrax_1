@@ -16,6 +16,22 @@ interface CalibrationScreenProps {
   onBodyTypeDetected: (type: BodyType) => void;
 }
 
+// ── Visually-hidden style (sr-only) ──────────────────────────────────────────
+// This CSS pattern hides an element from sighted users while keeping it fully
+// available to screen readers. clip-path: inset(50%) is the modern replacement
+// for the deprecated `clip: rect(...)` property.
+const srOnly: React.CSSProperties = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: 0,
+  margin: '-1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+  border: 0,
+};
+
 export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ 
   selectedExercise, onSelectExercise, onNext, onBack, onBodyTypeDetected
 }) => {
@@ -38,6 +54,8 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
     leftWristAboveShoulder: false,
     rightWristAboveShoulder: false,
     isPoseLost: false,
+    isThumbsUp: false,
+    isCrossedArms: false,
   });
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(3);
@@ -48,6 +66,61 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
   const lastProcessTime = useRef<number>(0);
   const FPS_LIMIT = 15;
   const countdownIntervalRef = useRef<any>(null);
+
+  // ── ARIA Live Region State ────────────────────────────────────────────────────
+  // One string that the hidden live region will announce to screen readers.
+  // We update it from useEffect hooks below, each watching a specific thing.
+  const [announcement, setAnnouncement] = useState('');
+
+  // Refs to remember the previous values so we only announce when something
+  // actually transitions (e.g., isReady going false → true), not on every frame.
+  const prevIsReadyRef = useRef(false);
+  const prevPoseLostRef = useRef(false);
+
+  // ── Announce calibration status messages ──────────────────────────────────────
+  // This runs whenever result.message changes to a new string.
+  // React's dependency check means the same message repeated across pose frames
+  // will NOT re-trigger this — only genuine new messages will.
+  useEffect(() => {
+    if (result.isReady && !prevIsReadyRef.current) {
+      // Only announce "ready" once when we first become ready
+      setAnnouncement('Calibration complete. Raise both hands above your shoulders to begin.');
+      prevIsReadyRef.current = true;
+    } else if (!result.isReady) {
+      // Announce each new positioning instruction
+      setAnnouncement(result.message);
+      prevIsReadyRef.current = false;
+    }
+  }, [result.message, result.isReady]);
+
+  // ── Announce pose lost / regained ─────────────────────────────────────────────
+  // We track the previous isPoseLost value in a ref so we only announce on the
+  // transition (lost → not lost, or not lost → lost), not repeatedly.
+  useEffect(() => {
+    if (gestureResult.isPoseLost && !prevPoseLostRef.current) {
+      setAnnouncement('Pose lost. Please step back into the camera frame.');
+    } else if (!gestureResult.isPoseLost && prevPoseLostRef.current) {
+      setAnnouncement('Pose detected. Hold your position.');
+    }
+    prevPoseLostRef.current = gestureResult.isPoseLost;
+  }, [gestureResult.isPoseLost]);
+
+  // ── Announce countdown seconds ─────────────────────────────────────────────────
+  // countdownSeconds changes once per second during the countdown, so this
+  // effect naturally throttles itself — it won't flood the screen reader.
+  useEffect(() => {
+    if (countdownActive && countdownSeconds > 0) {
+      setAnnouncement(`Starting in ${countdownSeconds}`);
+    }
+  }, [countdownSeconds, countdownActive]);
+
+  // ── Announce camera errors ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (error) {
+      setAnnouncement('Camera error. Please verify camera access and refresh the page.');
+    }
+  }, [error]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -118,10 +191,11 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
   }, [selectedExercise, onBodyTypeDetected]);
 
   useEffect(() => {
-    if (gestureResult.isHandRaised && result.isReady && !gestureResult.isPoseLost && !countdownActive) {
+    const gestureTriggered = gestureResult.isHandRaised || gestureResult.isThumbsUp;
+    if (gestureTriggered && result.isReady && !gestureResult.isPoseLost && !countdownActive) {
       setCountdownActive(true);
       setCountdownSeconds(3);
-    } else if (!gestureResult.isHandRaised || gestureResult.isPoseLost) {
+    } else if (!gestureTriggered || gestureResult.isPoseLost) {
       if (countdownActive) {
         setCountdownActive(false);
         if (countdownIntervalRef.current) {
@@ -130,7 +204,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
         }
       }
     }
-  }, [gestureResult.isHandRaised, result.isReady, gestureResult.isPoseLost, countdownActive]);
+  }, [gestureResult.isHandRaised, gestureResult.isThumbsUp, result.isReady, gestureResult.isPoseLost, countdownActive]);
 
   useEffect(() => {
     if (countdownActive && countdownSeconds > 0) {
@@ -193,6 +267,40 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
           height={720}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', transform: 'scaleX(-1)' }} 
         />
+        
+        {/* Silhouette Guide Overlay */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', opacity: result.isReady ? 0 : 0.4, transition: 'opacity 0.5s ease' }}>
+          <svg viewBox="0 0 200 400" style={{ height: '85%', maxHeight: '650px', filter: 'drop-shadow(0 0 10px var(--neon-cyan))' }}>
+            <circle cx="100" cy="50" r="25" fill="none" stroke="var(--neon-cyan)" strokeWidth="2.5" strokeDasharray="6,6" />
+            <path d="M 60 95 C 100 80, 100 80, 140 95 L 130 200 L 140 370 L 115 370 L 100 230 L 85 370 L 60 370 L 70 200 Z" fill="none" stroke="var(--neon-cyan)" strokeWidth="2.5" strokeDasharray="6,6" strokeLinejoin="round" />
+            <path d="M 60 95 L 35 180 M 140 95 L 165 180" fill="none" stroke="var(--neon-cyan)" strokeWidth="2.5" strokeDasharray="6,6" strokeLinecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      {/*
+        ══════════════════════════════════════════════════════════
+        ARIA LIVE REGION — Screen Reader Announcements
+        ══════════════════════════════════════════════════════════
+
+        IMPORTANT: This div must ALWAYS be in the DOM — never put it inside an
+        `{condition && ...}` block. Screen readers register live regions when
+        they first appear in the DOM. If this element is removed and re-added
+        (because it was inside a conditional branch), the screen reader loses
+        its reference to it and stops announcing updates.
+
+        The `announcement` state is updated by the useEffect hooks above,
+        each of which watches a specific meaningful event (calibration message,
+        pose lost, countdown, error). They use prev-value refs to fire only
+        on actual transitions — not on every pose frame.
+      */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={srOnly}
+      >
+        {announcement}
       </div>
 
       <div className="ui-layer" style={{ position: 'relative', zIndex: 10, height: '100%', padding: '40px', pointerEvents: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -320,7 +428,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
             <div className="glass" style={{ padding: '20px 40px', minWidth: '350px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', border: '2px solid var(--neon-cyan)', background: 'rgba(0, 240, 255, 0.05)', boxShadow: '0 0 20px rgba(0, 240, 255, 0.3)' }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--neon-cyan)', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 700 }}>STARTING IN</div>
               <div style={{ fontFamily: 'var(--font-heading)', fontSize: '4rem', color: 'var(--neon-cyan)', letterSpacing: '4px', textShadow: '0 0 20px rgba(0, 240, 255, 0.8)', animation: 'pulse 0.5s ease-in-out' }}>{countdownSeconds}</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>KEEP YOUR HANDS UP</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>KEEP POSITION STEADY</div>
             </div>
           ) : gestureResult.isPoseLost ? (
             <div className="glass" style={{ padding: '20px 40px', minWidth: '350px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', border: '2px solid var(--neon-red)', background: 'rgba(255, 59, 92, 0.05)', boxShadow: '0 0 20px rgba(255, 59, 92, 0.3)' }}>
@@ -334,10 +442,10 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
                 <Hand color="var(--neon-purple)" size={28} style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />
                 <div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1.5px' }}>READY TO START</div>
-                  <div style={{ color: 'var(--neon-cyan)', fontWeight: 700, fontSize: '0.85rem' }}>RAISE BOTH HANDS</div>
+                  <div style={{ color: 'var(--neon-cyan)', fontWeight: 700, fontSize: '0.85rem' }}>RAISE HANDS OR THUMBS UP</div>
                 </div>
               </div>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textAlign: 'center', lineHeight: 1.6 }}>Lift both hands above your shoulders to begin analysis</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textAlign: 'center', lineHeight: 1.6 }}>Lift both hands or give a thumbs up to begin analysis</div>
               {gestureResult.confidence > 0 && gestureResult.confidence < 1 && (
                 <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
                   <div style={{ width: `${gestureResult.confidence * 100}%`, height: '100%', background: 'var(--neon-purple)', transition: 'width 0.3s ease', boxShadow: '0 0 10px var(--neon-purple)' }} />
@@ -351,7 +459,15 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
               </div>
               <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1.5px' }}>{selectedExercise.name} mode</div>
-                  <div style={{ color: 'var(--neon-yellow)', fontWeight: 700, fontSize: '0.85rem' }}>{result.message}</div>
+                  {/*
+                    NOTE: aria-live / role / aria-atomic have been removed from this
+                    visible element. Announcements are now handled by the dedicated
+                    hidden live region at the top of the JSX, which covers ALL states
+                    (calibrating, ready, pose lost, countdown, error) — not just this one.
+                  */}
+                  <div style={{ color: 'var(--neon-yellow)', fontWeight: 700, fontSize: '0.85rem' }}>
+                    {result.message}
+                  </div>
               </div>
             </div>
           )}

@@ -1,35 +1,33 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { CalibrationScreen } from "./components/CalibrationScreen";
 import { WorkoutScreen } from "./components/WorkoutScreen";
 import { SummaryScreen } from "./components/SummaryScreen";
 import { ReplayScreen } from "./components/ReplayScreen";
-import { LoginScreen } from "./components/LoginScreen";
-import { SignUpScreen } from "./components/SignUpScreen";
-import { ForgotPasswordScreen } from "./components/ForgotPasswordScreen";
-import { UserProfileScreen } from "./components/UserProfileScreen";
-import { ProtectedRoute } from "./components/ProtectedRoute";
+import { TrophyRoom } from "./components/TrophyRoom";
+import { BadgeNotification } from "./components/BadgeNotification";
 import { exercises, ExerciseConfig } from "./config/exercises";
 import { BodyType } from "./services/bodyTypeEngine";
 import { useTheme } from "./context/ThemeContext";
-import { useAuth } from "./context/AuthContext";
-import { initializeAutoSync } from "./services/workoutSyncService";
 import HistoryPage from "./HistoryPage";
-import "./styles/auth.css";
-import "./styles/app.css";
+import { SummaryScreenSkeleton } from "./components/SummaryScreenSkeleton";
+import { useAuth } from "./context/AuthContext";
+import { LoginScreen } from "./components/LoginScreen";
+import { SignUpScreen } from "./components/SignUpScreen";
+import { ForgotPasswordScreen } from "./components/ForgotPasswordScreen";
+import { useBadges } from "./hooks/useBadges";
 
 type Screen =
-  | "login"
-  | "signup"
-  | "forgot-password"
   | "welcome"
   | "calibration"
   | "workout"
   | "summary"
   | "replay"
   | "history"
-  | "profile";
-
+  | "login"
+  | "signup"
+  | "forgot-password"
+  | "trophy";
 interface WorkoutStats {
   reps: number;
   totalReps: number;
@@ -46,11 +44,7 @@ interface WorkoutStats {
 function App() {
   const { theme, toggleTheme } = useTheme();
   const { user, loading: authLoading } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
-    // If user is already authenticated, start with welcome screen
-    // Otherwise, start with login screen
-    return "login";
-  });
+  const [currentScreen, setCurrentScreen] = useState<Screen>("welcome");
   const [selectedExercise, setSelectedExercise] = useState<ExerciseConfig>(
     exercises.squat,
   );
@@ -66,32 +60,37 @@ function App() {
     mistakes: {},
     bestStreak: 0,
   });
+
+  const { newlyEarned, clearNewlyEarned, checkAndAwardBadges } = useBadges();
+
+  const [statsLoading, setStatsLoading] = useState(false);
+
   const lastSwitchTime = useRef<number>(0);
 
   const navigateTo = (screen: Screen) => {
     setCurrentScreen(screen);
   };
 
-  // Auto-navigate to welcome screen when user logs in
-  useEffect(() => {
-    if (user && currentScreen === "login") {
-      setCurrentScreen("welcome");
-    }
-  }, [user]);
-
-  // Initialize auto-sync when user logs in
-  useEffect(() => {
-    if (user?.uid) {
-      console.log("🔄 Initializing auto-sync for user:", user.uid);
-      initializeAutoSync(user.uid);
-    }
-  }, [user?.uid]);
-
   const handleWorkoutEnd = (
     finalStats: Omit<WorkoutStats, "exerciseName"> & { tags?: string[] },
   ) => {
-    setStats({ ...finalStats, exerciseName: selectedExercise.name });
+    setStatsLoading(true);
+    const fullStats = { ...finalStats, exerciseName: selectedExercise.name };
+    setStats(fullStats);
     navigateTo("summary");
+
+    // Award badges based on completed session
+    checkAndAwardBadges({
+      totalReps: finalStats.totalReps,
+      accuracy: finalStats.accuracy,
+      exerciseName: selectedExercise.name,
+      bestStreak: finalStats.bestStreak,
+    });
+
+    // Show skeleton briefly before rendering real summary
+    setTimeout(() => {
+      setStatsLoading(false);
+    }, 1500);
   };
 
   const handleAutoDetect = (exerciseKey: string) => {
@@ -124,22 +123,26 @@ function App() {
 
   // If not authenticated, show auth screens
   if (!user) {
+    const activeAuthScreen = ["login", "signup", "forgot-password"].includes(currentScreen)
+      ? currentScreen
+      : "login";
+
     return (
       <main className="spectrax-app">
-        {currentScreen === "login" && (
+        {activeAuthScreen === "login" && (
           <LoginScreen
             onLoginSuccess={() => navigateTo("welcome")}
             onSignUpClick={() => navigateTo("signup")}
             onForgotPasswordClick={() => navigateTo("forgot-password")}
           />
         )}
-        {currentScreen === "signup" && (
+        {activeAuthScreen === "signup" && (
           <SignUpScreen
             onSignUpSuccess={() => navigateTo("welcome")}
             onLoginClick={() => navigateTo("login")}
           />
         )}
-        {currentScreen === "forgot-password" && (
+        {activeAuthScreen === "forgot-password" && (
           <ForgotPasswordScreen onBack={() => navigateTo("login")} />
         )}
       </main>
@@ -154,80 +157,65 @@ function App() {
     >
       <button
         onClick={toggleTheme}
-
-        className="theme-toggle"
+        className={`theme-toggle ${currentScreen === "workout" ? "workout-active" : ""}`}
         aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       >
         {theme === "dark" ? "☾ Dark Mode" : "☀ Light Mode"}
       </button>
 
-      {/* Profile Button */}
-      <button
-        onClick={() => navigateTo("profile")}
-        className="profile-button"
-        aria-label="View profile"
-        title="View profile"
-        className={`theme-toggle ${currentScreen === 'workout' ? 'workout-active' : ''}`}
-        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        👤
-      </button>
+      {currentScreen === "welcome" && (
+        <WelcomeScreen
+          onStart={() => navigateTo("calibration")}
+          onViewHistory={() => navigateTo("history")}
+          onViewTrophies={() => navigateTo("trophy")}
+        />
+      )}
 
-      <ProtectedRoute
-        fallback={
-          <LoginScreen
-            onLoginSuccess={() => navigateTo("welcome")}
-            onSignUpClick={() => navigateTo("signup")}
-            onForgotPasswordClick={() => navigateTo("forgot-password")}
-          />
-        }
-      >
-        {currentScreen === "welcome" && (
-          <WelcomeScreen
-            onStart={() => navigateTo("calibration")}
-            onViewHistory={() => navigateTo("history")}
-          />
-        )}
+      {currentScreen === "calibration" && (
+        <CalibrationScreen
+          selectedExercise={selectedExercise}
+          onSelectExercise={handleSelectExercise}
+          onNext={() => navigateTo("workout")}
+          onBack={() => navigateTo("welcome")}
+          onBodyTypeDetected={setBodyType}
+        />
+      )}
 
-        {currentScreen === "calibration" && (
-          <CalibrationScreen
-            selectedExercise={selectedExercise}
-            onSelectExercise={handleSelectExercise}
-            onNext={() => navigateTo("workout")}
-            onBack={() => navigateTo("welcome")}
-            onBodyTypeDetected={setBodyType}
-          />
-        )}
+      {currentScreen === "workout" && (
+        <WorkoutScreen
+          exercise={selectedExercise}
+          onEnd={handleWorkoutEnd}
+          onAutoDetect={handleAutoDetect}
+          bodyType={bodyType}
+        />
+      )}
 
-        {currentScreen === "workout" && (
-          <WorkoutScreen
-            exercise={selectedExercise}
-            onEnd={handleWorkoutEnd}
-            onAutoDetect={handleAutoDetect}
-            bodyType={bodyType}
-          />
-        )}
-
-        {currentScreen === "summary" && (
+      {currentScreen === "summary" &&
+        (statsLoading ? (
+          <SummaryScreenSkeleton />
+        ) : (
           <SummaryScreen
             stats={stats}
             onRestart={() => navigateTo("welcome")}
             onViewReplay={() => navigateTo("replay")}
           />
-        )}
+        ))}
 
-        {currentScreen === "replay" && (
-          <ReplayScreen onBack={() => navigateTo("summary")} stats={stats} />
-        )}
+      {currentScreen === "replay" && (
+        <ReplayScreen onBack={() => navigateTo("summary")} stats={stats} />
+      )}
 
-        {currentScreen === "history" && (
-          <HistoryPage onBack={() => navigateTo("welcome")} />
-        )}
+      {currentScreen === "history" && (
+        <HistoryPage onBack={() => navigateTo("welcome")} />
+      )}
 
-        {currentScreen === "profile" && (
-          <UserProfileScreen onLogout={() => navigateTo("login")} />
-        )}
-      </ProtectedRoute>
+      {currentScreen === "trophy" && (
+        <TrophyRoom onBack={() => navigateTo("welcome")} />
+      )}
+
+      {/* Global badge unlock notification — rendered at the app root so it's
+          always visible regardless of which screen is active */}
+      <BadgeNotification badge={newlyEarned} onClose={clearNewlyEarned} />
     </main>
   );
 }

@@ -1,16 +1,31 @@
-import React, { useEffect, useRef } from "react";
-import { Play, Sparkles, History } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Play, Sparkles, History, Trophy } from "lucide-react";
 
 interface WelcomeScreenProps {
   onStart: () => void;
   onViewHistory: () => void;
+  onViewTrophies: () => void;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onStart,
   onViewHistory,
+  onViewTrophies,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    const x = -((clientY - innerHeight / 2) / innerHeight) * 20;
+    const y = ((clientX - innerWidth / 2) / innerWidth) * 20;
+    setTilt({ x, y });
+  };
+
+  const handleMouseLeave = () => {
+    setTilt({ x: 0, y: 0 });
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -87,6 +102,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   return (
     <div
       className="screen-container welcome-screen"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       style={{
         justifyContent: "center",
         alignItems: "center",
@@ -98,7 +115,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         style={{ position: "absolute", inset: 0, opacity: 0.6 }}
       />
 
-      <div className="animate-in" style={{ position: "relative", zIndex: 10 }}>
+      <div 
+        className="animate-in" 
+        style={{ 
+          position: "relative", 
+          zIndex: 10,
+          transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+          transition: "transform 0.15s ease-out",
+          transformStyle: "preserve-3d"
+        }}
+      >
         <div
           style={{
             display: "inline-flex",
@@ -161,12 +187,14 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             gap: "16px",
           }}
         >
-          <button onClick={onStart} className="btn-neon">
+          <button onClick={onStart} className="btn-neon" aria-label="Initialize System" tabIndex={0}>
             INITIALIZE SYSTEM <Play size={18} fill="currentColor" />
           </button>
 
           <button
             onClick={onViewHistory}
+            aria-label="View Workout History"
+            tabIndex={0}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -201,6 +229,44 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           >
             <History size={15} />
             VIEW HISTORY
+          </button>
+
+          <button
+            onClick={onViewTrophies}
+            aria-label="View Trophy Room"
+            tabIndex={0}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "rgba(255, 214, 0, 0.08)",
+              border: "1.5px solid rgba(255, 214, 0, 0.35)",
+              borderRadius: "14px",
+              color: "var(--neon-yellow)",
+              cursor: "pointer",
+              padding: "12px 28px",
+              fontSize: "0.75rem",
+              letterSpacing: "2px",
+              fontWeight: 700,
+              transition: "all 0.3s ease",
+              textTransform: "uppercase",
+              boxShadow: "0 2px 8px rgba(255, 214, 0, 0.1)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255, 214, 0, 0.15)";
+              e.currentTarget.style.borderColor = "var(--neon-yellow)";
+              e.currentTarget.style.boxShadow = "0 4px 16px rgba(255, 214, 0, 0.25)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255, 214, 0, 0.08)";
+              e.currentTarget.style.borderColor = "rgba(255, 214, 0, 0.35)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(255, 214, 0, 0.1)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            <Trophy size={15} />
+            TROPHY ROOM
           </button>
         </div>
       </div>

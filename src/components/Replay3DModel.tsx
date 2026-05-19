@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import React, { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export interface ReplayFrame {
   timestamp: number;
@@ -119,7 +120,7 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-
+  const controlsRef = useRef<OrbitControls | null>(null);
   // Fallback refs
   const jointsRef = useRef<THREE.Mesh[]>([]);
   const bonesRef = useRef<
@@ -174,6 +175,14 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
     renderer.shadowMap.autoUpdate = true;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 + 0.1; // allow looking slightly from below
+    controls.minDistance = 1.0;
+    controls.maxDistance = 10.0;
+    controlsRef.current = controls;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
@@ -430,6 +439,7 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
       if (mountRef.current && rendererRef.current) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
+      controlsRef.current?.dispose();
       rendererRef.current?.dispose();
     };
   }, [frames, modelUrl]);
@@ -461,15 +471,30 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
       if (modelLoaded) {
         if (!modelGroupRef.current) return;
         // --- Output to GLTF Skinned Mesh ---
+        // --- Dynamic Z-axis Depth Estimation ---
+        let depthScale = 2.0;
+        const rawLShoulder = frame.landmarks[11];
+        const rawRShoulder = frame.landmarks[12];
+        const rawLHip = frame.landmarks[23];
+        const rawRHip = frame.landmarks[24];
+        
+        if (rawLShoulder && rawRShoulder && rawLHip && rawRHip) {
+            // Compute torso diagonal as a reference for anatomical depth scaling
+            const dx = rawLShoulder.x - rawRHip.x;
+            const dy = rawLShoulder.y - rawRHip.y;
+            const torsoSize = Math.sqrt(dx * dx + dy * dy);
+            if (torsoSize > 0.1) {
+                // Base Z multiplier scaled inversely by apparent torso size for perspective depth correction
+                depthScale = (0.5 / torsoSize) * 3.0;
+            }
+        }
+
         const getLm = (idx: number) => {
           const lm = frame.landmarks[idx];
           if (!lm) return null;
           // Invert X axis so user's physical right arm maps to screen right side = physical right of avatar
-          return new THREE.Vector3(
-            -(lm.x - 0.5) * 2,
-            -(lm.y - 0.5) * 2,
-            -lm.z * 2,
-          );
+          // Apply estimated depth scale to Z for more accurate 3D replay representation
+          return new THREE.Vector3(-(lm.x - 0.5) * 2, -(lm.y - 0.5) * 2, -lm.z * depthScale);
         };
 
         // Torso Alignment & Root Motion
@@ -526,13 +551,11 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
           // Update model matrix since we moved it, so FK calculation has the correct parent offsets!
           modelGroupRef.current.updateMatrixWorld(true);
 
-          // --- Dynamic Camera Tracking ---
-          if (cameraRef.current) {
-            const lookTarget = new THREE.Vector3().lerpVectors(
-              hipCenter,
-              shoulderCenter,
-              0.5,
-            );
+          // --- Dynamic Camera Tracking & Orbit Target Sync ---
+          const lookTarget = new THREE.Vector3().lerpVectors(hipCenter, shoulderCenter, 0.5);
+          if (controlsRef.current) {
+            controlsRef.current.target.lerp(lookTarget, 0.05);
+          } else if (cameraRef.current) {
             cameraRef.current.lookAt(lookTarget);
           }
         }
@@ -625,9 +648,6 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
         applyPose("rightHip", 24, 26);
         applyPose("rightKnee", 26, 28);
         applyPose("rightAnkle", 28, 30);
-        applyPose("leftKnee", 25, 27);
-        applyPose("rightHip", 24, 26);
-        applyPose("rightKnee", 26, 28);
 
         // --- 3D to 2D HUD Projection ---
         const newLabels: any[] = [];
@@ -673,9 +693,6 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
         projectJoint(24, "rightHip", "R HIP", 12, 24, 26);
 
         setHudLabels(newLabels);
-        applyPose("leftKnee", 25, 27);
-        applyPose("rightHip", 24, 26);
-        applyPose("rightKnee", 26, 28);
 
         // Error Highlight logic for GLTF model
         skinnedMeshesRef.current.forEach((mesh) => {
@@ -740,6 +757,10 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
             0.2,
           );
         });
+      }
+
+      if (controlsRef.current) {
+        controlsRef.current.update();
       }
 
       if (sceneRef.current && cameraRef.current && rendererRef.current) {
