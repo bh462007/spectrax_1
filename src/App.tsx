@@ -29,8 +29,18 @@ type Screen =
   | "trophy"
   | "login"
   | "signup"
+ feature/ai-workout-recommendations
+ feature/ai-workout-recommendations
   | "forgot-password";
 
+
+  | "forgot-password"
+  | "trophy";
+main
+=======
+  | "forgot-password";
+
+main
 interface WorkoutStats {
   reps: number;
   totalReps: number;
@@ -160,8 +170,14 @@ function App() {
     );
   }
 
+ feature/ai-workout-recommendations
+  // If not authenticated, show auth screens
+  
+  if (!user) {
+=======
   // If not authenticated and Firebase is configured, show auth screens
   if (firebaseConfigured && !user) {
+ main
     const activeAuthScreen = ["login", "signup", "forgot-password"].includes(currentScreen)
       ? currentScreen
       : "login";
@@ -186,6 +202,7 @@ function App() {
       </main>
     );
   }
+    
 
   // If authenticated, show main app with theme toggle and workout screens
   return (

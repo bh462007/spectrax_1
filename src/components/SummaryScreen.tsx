@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Award, Clock, RotateCcw, Video, Activity } from 'lucide-react';
+ feature/ai-workout-recommendations
+import { useWorkoutSync } from '../hooks/useWorkoutSync';
+import AIRecommendations from './AIRecommendations';
+import { generateRecommendations } from '../engine/recommendationEngine';
+=======
 import { useWorkoutSync } from "../hooks/useWorkoutSync";
 
+ main
 interface SummaryScreenProps {
   stats: { 
     reps: number; 
@@ -102,6 +108,13 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({ stats, leveling, o
           stats.repScores.reduce((a, b) => a + b, 0) / stats.repScores.length,
         )
       : 0;
+  const recommendations = generateRecommendations(
+    stats.accuracy,
+    stats.mistakes,
+    stats.bestStreak,
+    averageRepScore,
+    stats.exerciseName
+  );
 
   if (stats.totalReps === 0) {
     return (
@@ -661,7 +674,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({ stats, leveling, o
           </div>
         </div>
       )}
-
+      <AIRecommendations recommendations={recommendations} />
       {/* Action Buttons */}
       <div
         className="animate-in"
