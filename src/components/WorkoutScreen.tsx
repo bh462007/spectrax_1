@@ -190,9 +190,19 @@ const [showExitModal, setShowExitModal] = useState(false);
   const [vlmProgress, setVlmProgress] = useState(0);
   const [clipResult, setClipResult] = useState<any>(null);
   const { isOnline } = useWorkoutSync();
-const [panelsLocked, setPanelsLocked] = useState(true);
-const [cameraError, setCameraError] = useState<string | null>(null);
-const FPS_LIMIT = 30;
+  const throttleLevel = useThrottleLevel();
+  const wsSocketRef = useWorkoutWebSocket();
+  const srOnly: React.CSSProperties = {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    padding: 0,
+    margin: '-1px',
+    overflow: 'hidden',
+    clip: 'rect(0, 0, 0, 0)',
+    whiteSpace: 'nowrap',
+    borderWidth: 0,
+  };
 
 const srOnly: React.CSSProperties = {
   position: 'absolute',
