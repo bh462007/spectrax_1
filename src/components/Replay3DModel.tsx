@@ -715,6 +715,8 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
 
 
 
+
+
   const isPlaying =
     externalIsPlaying !== undefined ? externalIsPlaying : _isPlaying;
   const currentFrameIdx =
@@ -1820,8 +1822,6 @@ export const Replay3DModel: React.FC<Replay3DModelProps> = ({
       const shoulderCenter = lShoulder && rShoulder ? new THREE.Vector3().addVectors(lShoulder, rShoulder).multiplyScalar(0.5) : new THREE.Vector3();
       const hipCenter      = lHip && rHip ? new THREE.Vector3().addVectors(lHip, rHip).multiplyScalar(0.5) : new THREE.Vector3();
       const bodyCenter     = new THREE.Vector3().addVectors(shoulderCenter, hipCenter).multiplyScalar(0.5);
-
-      updateGridPosition(bodyCenter);
 
       if (modelLoaded) {
         updateSegmentScaleAdaptor(frame.landmarks, getLm);
