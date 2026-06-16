@@ -114,6 +114,9 @@ export const RiskPanel = ({
           STOP AT REP {recommendedStopRep}
         </div>
       )}
+    </div>
+  );
+};
 export const TutPanel = ({
   tutMetrics,
   statusColor,

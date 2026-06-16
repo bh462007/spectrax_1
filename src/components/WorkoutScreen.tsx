@@ -17,8 +17,7 @@ import { useWorkoutSync } from '../hooks/useWorkoutSync';
 import { useDisplayConfig } from '../hooks/useDisplayConfig';
 import { useWorkoutWebSocket } from '../hooks/useWorkoutWebSocket';
 import { useOffscreenCanvas } from '../hooks/useOffscreenCanvas';
-import { FocusPanel, TimerPanel, RepsPanel, EnginePanel, SensePanel, AngleDialPanel, RiskPanel } from './WorkoutPanels';
-import { FocusPanel, TimerPanel, RepsPanel, EnginePanel, SensePanel, AngleDialPanel, TutPanel } from './WorkoutPanels';
+import { FocusPanel, TimerPanel, RepsPanel, EnginePanel, SensePanel, AngleDialPanel, RiskPanel, TutPanel } from './WorkoutPanels';
 import { ghostService } from '../services/ghostService';
 import type { GhostStats } from '../services/ghostService';
 import { useThrottleLevel } from '../services/performanceThrottleService';
@@ -59,8 +58,7 @@ interface WorkoutScreenProps {
   onCancel?: () => void;
 }
 
-type WorkoutPanelId = "focus" | "timer" | "reps" | "engine" | "sense" | "dial" | "risk";
-type WorkoutPanelId = "focus" | "timer" | "reps" | "engine" | "sense" | "dial" | "tut";
+type WorkoutPanelId = "focus" | "timer" | "reps" | "engine" | "sense" | "dial" | "risk" | "tut";
 
 type PanelPosition = {
   x: number;
@@ -247,6 +245,7 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({ exercise, onEnd, o
       engine: React.createRef<HTMLDivElement>(),
       sense: React.createRef<HTMLDivElement>(),
       dial: React.createRef<HTMLDivElement>(),
+      risk: React.createRef<HTMLDivElement>(),
       tut: React.createRef<HTMLDivElement>()
     };
   }
@@ -756,7 +755,7 @@ export const WorkoutScreen: React.FC<WorkoutScreenProps> = ({ exercise, onEnd, o
     mutableState.current = nextState;
     setEngineState(nextState);
 
-    let riskSnapshot: ReturnType<<typeof injuryRiskEngine.computeRisk> | undefined;
+    let riskSnapshot: ReturnType<typeof injuryRiskEngine.computeRisk> | undefined;
     if (nextState.vbtMetrics) {
       riskSnapshot = injuryRiskEngine.computeRisk(nextState.vbtMetrics, nextState.reps);
       setRiskMetrics({

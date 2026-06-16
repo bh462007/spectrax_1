@@ -339,7 +339,7 @@ export class KinematicEngine {
     const drift = this.repBarPathDrifts.length > 0 ? this.repBarPathDrifts[this.repBarPathDrifts.length - 1] * 1000 : 0;
     
     // Weighted composite: 50% velocity dropoff, 30% asymmetry, 20% drift
-    let index = Math.round(dropoff * 0.5 + asymmetry * 0.3 + Math.min(drift, 100) * 0.2);
+    const index = Math.round(dropoff * 0.5 + asymmetry * 0.3 + Math.min(drift, 100) * 0.2);
     return Math.min(100, Math.max(0, index));
   }
 
