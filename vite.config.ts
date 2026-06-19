@@ -40,6 +40,9 @@ export default defineConfig({
   esbuild: {
     target: "es2020",
   },
+  optimizeDeps: {
+    include: ["@msgpack/msgpack"],
+  },
   plugins: [
     sharedArrayBufferHeaders(),
     react(),
