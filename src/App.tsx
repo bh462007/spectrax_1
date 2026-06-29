@@ -37,6 +37,7 @@ const FitnessCalculator = lazy(() => import("./components/FitnessCalculator").th
 const CalibrationScreen = lazy(() => import("./components/CalibrationScreen").then(m => ({ default: m.CalibrationScreen })));
 const WorkoutScreen = lazy(() => import("./components/WorkoutScreen").then(m => ({ default: m.WorkoutScreen })));
 const ReplayScreen = lazy(() => import("./components/ReplayScreen").then(m => ({ default: m.ReplayScreen })));
+const AvatarCustomizationScreen = lazy(() => import("./components/AvatarCustomizationScreen").then(m => ({ default: m.AvatarCustomizationScreen })));
 
 type Screen =
   | "welcome"
@@ -52,16 +53,13 @@ type Screen =
   | "forgot-password"
   | "trophy"
   | "profile"
-  | "privacy" 
-  | "terms&conditions"
-  | "fitness";
+  | "fitness"
+  | "avatar";
 
 type ScreenTransitionMap = Record<Screen, readonly Screen[]>;
 
 const SCREEN_TRANSITIONS: ScreenTransitionMap = {
-  privacy: ["welcome"],
-  "terms&conditions": ["welcome"],
-  welcome: ["calibration", "history", "trophy", "profile", "login", "fitness", "about", "contact",'privacy','terms&conditions'],
+  welcome: ["calibration", "history", "trophy", "profile", "login", "fitness", "about", "contact", "avatar"],
   calibration: ["workout", "welcome", "login"],
   workout: ["summary", "welcome"],
   summary: ["replay", "welcome"],
@@ -75,6 +73,7 @@ const SCREEN_TRANSITIONS: ScreenTransitionMap = {
   fitness: ["welcome"],
   about: ["welcome"],
   contact: ["welcome"],
+  avatar: ["welcome"],
 };
 
 const canTransitionTo = (from: Screen, to: Screen) => {
@@ -355,8 +354,9 @@ function App() {
           onStart={() => navigateTo("calibration")}
           onViewHistory={() => navigateTo("history")}
           onViewTrophies={() => navigateTo("trophy")}
-          onViewProfile={user ? () => navigateTo("profile") : undefined}
+          onViewProfile={() => navigateTo("profile")}
           onViewFitnessCalculator={() => navigateTo("fitness")}
+          onViewAvatarCustomization={() => navigateTo("avatar")}
           onViewWorkoutPlans={() => {}}
           leveling={leveling}
         />
@@ -429,6 +429,15 @@ function App() {
 
         {currentScreen === "profile" && (
           <UserProfileScreen onLogout={() => navigateTo("welcome")} />
+        )}
+
+        {currentScreen === "contact" && (
+          <Contact />
+        )}
+        {currentScreen === "avatar" && (
+          <Suspense fallback={<div className="loading-fallback">Loading Avatar Customization...</div>}>
+            <AvatarCustomizationScreen onBack={() => navigateTo("welcome")} />
+          </Suspense>
         )}
 
         {currentScreen === "fitness" && (
